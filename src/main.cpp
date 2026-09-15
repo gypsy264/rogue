@@ -11,10 +11,13 @@ namespace ports {
  * wait for it to finish.
  */
 void initialize() {
-	printf(" rogue: initialize\n");  // shows in `pros terminal` and in the emulator console
-	pros::lcd::initialize();
-	pros::lcd::set_text(1, "rogue");
-	pros::lcd::set_text(2, "ready");
+	printf("rogue: initialize\n");  // shows in `pros terminal` and in the emulator console
+
+	pros::screen::set_pen(pros::Color::black);
+	pros::screen::fill_rect(0, 0, 480, 240);
+	pros::screen::set_pen(pros::Color::white);
+	pros::screen::print(pros::E_TEXT_LARGE, 1, "rogue");
+	pros::screen::print(pros::E_TEXT_MEDIUM, 3, "ready");
 }
 
 /** Runs while the robot is disabled by the field or competition switch. */
@@ -35,13 +38,19 @@ void opcontrol() {
 	pros::MotorGroup left_mg(ports::LEFT_DRIVE);
 	pros::MotorGroup right_mg(ports::RIGHT_DRIVE);
 
+	int loops = 0;
 	while (true) {
 		int dir = master.get_analog(ANALOG_LEFT_Y);
 		int turn = master.get_analog(ANALOG_RIGHT_X);
 		left_mg.move(dir - turn);
 		right_mg.move(dir + turn);
 
-		pros::lcd::print(3, "L %4d  R %4d", dir - turn, dir + turn);
+		if (loops % 25 == 0) {  // refresh the screen twice a second
+			pros::screen::set_pen(pros::Color::white);
+			pros::screen::print(pros::E_TEXT_MEDIUM, 5, "L %4d   R %4d", dir - turn, dir + turn);
+			pros::screen::print(pros::E_TEXT_MEDIUM, 6, "uptime %5.1f s", pros::millis() / 1000.0);
+		}
+		loops++;
 		pros::delay(20);  // 50 Hz control loop
 	}
 }
