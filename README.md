@@ -3,6 +3,7 @@ VEX V5 robot, written in C++ on [PROS](https://pros.cs.purdue.edu/) kernel 4.2.2
 
 ## Layout
 - `src/main.cpp` - robot code: `initialize`, `autonomous`, `opcontrol`
+- `src/handlers/` and `include/handlers/` - helpers shared by all robot code. `screenController` gives `writeScreen("text %d", x, y, value)`, `writeScreenLarge`, `showError`, `clearScreen`
 - `include/main.h` - project header, include it from every source file
 - `include/pros/` and `firmware/` - PROS kernel API and libraries (do not edit)
 - `project.pros`, `Makefile`, `common.mk` - PROS build configuration
@@ -32,9 +33,14 @@ repo cloned at `../vex-v5-qemu` (override with `VEX_SIM_DIR`).
 
 - `printf` output appears in the terminal, so use it for feedback.
 - Add `--gdb` to pause at start and attach a debugger on port 1234.
-- Known limit: the LCD (`pros::lcd`) only renders its first strip; the rest of
-  the screen stays black. This is an open bug in the emulator (issue 49), not in
-  this project. Motors and sensors read as zero because nothing is attached.
+- Draw on the screen with `writeScreen` from `handlers/screenController.hpp`. The
+  PROS LCD (`pros::lcd`) only renders its first strip in the emulator (upstream
+  issue 49), so do not use it.
+- `pros::delay` never returns in the emulator because its timer interrupt is
+  incomplete. `tools/sim.sh` builds with `-DROGUE_SIM`, which makes the
+  `sleep_ms` helper in `main.cpp` busy-wait instead. Always call `sleep_ms`,
+  never `pros::delay` directly, so both builds behave.
+- Motors, sensors and the controller read zero because nothing is attached.
 
 ## Docs
 - PROS tutorials: https://pros.cs.purdue.edu/v5/tutorials/index.html

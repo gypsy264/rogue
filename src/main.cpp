@@ -1,9 +1,26 @@
 #include "main.h"
 
+#include "handlers/screenController.hpp"
+
 // Hardware layout. Change ports here, nowhere else.
 namespace ports {
 	constexpr std::initializer_list<int8_t> LEFT_DRIVE = {1, -2, 3};    // negative = reversed
 	constexpr std::initializer_list<int8_t> RIGHT_DRIVE = {-4, 5, -6};
+}
+
+/**
+ * Sleep for the control loop. On the robot this is pros::delay, which lets
+ * other tasks run. The QEMU emulator never wakes a sleeping task (its timer
+ * interrupt is incomplete), so emulator builds (tools/sim.sh, -DROGUE_SIM)
+ * busy-wait instead. Use this everywhere instead of pros::delay.
+ */
+static void sleep_ms(uint32_t ms) {
+#ifdef ROGUE_SIM
+	uint32_t start = pros::millis();
+	while (pros::millis() - start < ms) {}
+#else
+	pros::delay(ms);
+#endif
 }
 
 /**
@@ -12,12 +29,9 @@ namespace ports {
  */
 void initialize() {
 	printf("rogue: initialize\n");  // shows in `pros terminal` and in the emulator console
-
-	pros::screen::set_pen(pros::Color::black);
-	pros::screen::fill_rect(0, 0, 480, 240);
-	pros::screen::set_pen(pros::Color::white);
-	pros::screen::print(pros::E_TEXT_LARGE, 1, "rogue");
-	pros::screen::print(pros::E_TEXT_MEDIUM, 3, "ready");
+	clearScreen();
+	writeScreenLarge("rogue", 10, 40);
+	writeScreen("ready", 10, 90);
 }
 
 /** Runs while the robot is disabled by the field or competition switch. */
@@ -45,12 +59,13 @@ void opcontrol() {
 		left_mg.move(dir - turn);
 		right_mg.move(dir + turn);
 
-		if (loops % 25 == 0) {  // refresh the screen twice a second
-			pros::screen::set_pen(pros::Color::white);
-			pros::screen::print(pros::E_TEXT_MEDIUM, 5, "L %4d   R %4d", dir - turn, dir + turn);
-			pros::screen::print(pros::E_TEXT_MEDIUM, 6, "uptime %5.1f s", pros::millis() / 1000.0);
+		if (loops % 50 == 0) {  // once a second: console heartbeat and screen refresh
+			printf("rogue: loop %d, %lu ms\n", loops, (unsigned long)pros::millis());
+			writeScreen("L %4d   R %4d", 10, 130, dir - turn, dir + turn);
+			writeScreen("loop %d", 10, 160, loops);
+			writeScreen("up %.1f s", 250, 160, pros::millis() / 1000.0);
 		}
 		loops++;
-		pros::delay(20);  // 50 Hz control loop
+		sleep_ms(20);  // 50 Hz control loop
 	}
 }
