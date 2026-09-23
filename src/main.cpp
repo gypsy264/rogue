@@ -1,12 +1,8 @@
 #include "main.h"
 
+#include "handlers/gamepadController.hpp"
+#include "handlers/motorController.hpp"
 #include "handlers/screenController.hpp"
-
-// Hardware layout. Change ports here, nowhere else.
-namespace ports {
-	constexpr std::initializer_list<int8_t> LEFT_DRIVE = {1, -2, 3};    // negative = reversed
-	constexpr std::initializer_list<int8_t> RIGHT_DRIVE = {-4, 5, -6};
-}
 
 /**
  * Sleep for the control loop. On the robot this is pros::delay, which lets
@@ -30,12 +26,24 @@ static void sleep_ms(uint32_t ms) {
 void initialize() {
 	printf("rogue: initialize\n");  // shows in `pros terminal` and in the emulator console
 	clearScreen();
-	writeScreenLarge("rogue", 10, 40);
-	writeScreen("ready", 10, 90);
+	writeScreenLarge("rogue", 10, 10);
+
+	// Drive ports. Negative = motor mounted backwards, spins reversed.
+	// Front of the robot: if pushing the stick forward drives it backwards,
+	// flip both signs. If it spins instead of going straight, flip only one.
+	motorDefinePort(DriveSide::Left, 10);
+	motorDefinePort(DriveSide::Right, -9);
+	if (motorInit() == 0) {
+		writeScreen("drive ok  %d + %d motors", 10, 70, motorCount(DriveSide::Left), motorCount(DriveSide::Right));
+	}
+
+	gamepadInit();
 }
 
 /** Runs while the robot is disabled by the field or competition switch. */
-void disabled() {}
+void disabled() {
+	driveStop();
+}
 
 /** Runs after initialize() when a field or competition switch is connected. */
 void competition_initialize() {}
@@ -48,22 +56,30 @@ void autonomous() {}
  * after initialize(). Arcade drive: left stick Y = forward, right stick X = turn.
  */
 void opcontrol() {
-	pros::Controller master(pros::E_CONTROLLER_MASTER);
-	pros::MotorGroup left_mg(ports::LEFT_DRIVE);
-	pros::MotorGroup right_mg(ports::RIGHT_DRIVE);
-
+	constexpr int SPIN_POWER = 30;  // out of 127, slow
+	bool spinning = false;
 	int loops = 0;
 	while (true) {
-		int dir = master.get_analog(ANALOG_LEFT_Y);
-		int turn = master.get_analog(ANALOG_RIGHT_X);
-		left_mg.move(dir - turn);
-		right_mg.move(dir + turn);
+		// A toggles a slow spin in place. Sticks drive normally when it is off.
+		if (gamepadPressed(GamepadButton::A)) {
+			spinning = !spinning;
+			gamepadRumble(".");
+			printf("rogue: spin %s\n", spinning ? "on" : "off");
+		}
+
+		if (spinning) {
+			driveTank(SPIN_POWER, -SPIN_POWER);
+		} else {
+			driveArcade(gamepadLeftY(), gamepadRightX());
+		}
 
 		if (loops % 50 == 0) {  // once a second: console heartbeat and screen refresh
 			printf("rogue: loop %d, %lu ms\n", loops, (unsigned long)pros::millis());
-			writeScreen("L %4d   R %4d", 10, 130, dir - turn, dir + turn);
-			writeScreen("loop %d", 10, 160, loops);
-			writeScreen("up %.1f s", 250, 160, pros::millis() / 1000.0);
+			writeScreen("L %4d   R %4d", 10, 130, driveLeftPower(), driveRightPower());
+			writeScreen("spin %s", 250, 130, spinning ? "on" : "off");
+			writeScreen("pad %s", 10, 165, gamepadConnected() ? "on" : "off");
+			writeScreen("loop %d", 250, 165, loops);
+			writeScreen("up %.1f s", 10, 200, pros::millis() / 1000.0);
 		}
 		loops++;
 		sleep_ms(20);  // 50 Hz control loop

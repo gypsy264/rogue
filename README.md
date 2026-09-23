@@ -3,7 +3,10 @@ VEX V5 robot, written in C++ on [PROS](https://pros.cs.purdue.edu/) kernel 4.2.2
 
 ## Layout
 - `src/main.cpp` - robot code: `initialize`, `autonomous`, `opcontrol`
-- `src/handlers/` and `include/handlers/` - helpers shared by all robot code. `screenController` gives `writeScreen("text %d", x, y, value)`, `writeScreenLarge`, `showError`, `clearScreen`
+- `src/handlers/` and `include/handlers/` - helpers shared by all robot code:
+  - `screenController`: `writeScreen("text %d", x, y, value)`, `writeScreenLarge`, `showError`, `clearScreen`
+  - `motorController`: `motorDefinePort(DriveSide::Left, 1)` for each drive motor, then `motorInit()`; drive with `driveArcade`, `driveTank`, `driveStop`
+  - `gamepadController`: `gamepadInit()`, sticks with `gamepadLeftY()` and friends, buttons with `gamepadHeld` and `gamepadPressed`, `gamepadRumble`
 - `include/main.h` - project header, include it from every source file
 - `include/pros/` and `firmware/` - PROS kernel API and libraries (do not edit)
 - `project.pros`, `Makefile`, `common.mk` - PROS build configuration
@@ -40,7 +43,11 @@ repo cloned at `../vex-v5-qemu` (override with `VEX_SIM_DIR`).
   incomplete. `tools/sim.sh` builds with `-DROGUE_SIM`, which makes the
   `sleep_ms` helper in `main.cpp` busy-wait instead. Always call `sleep_ms`,
   never `pros::delay` directly, so both builds behave.
-- Motors, sensors and the controller read zero because nothing is attached.
+- Motors, sensors and the controller read zero because nothing is attached,
+  so the screen always shows "no motor" in the emulator. On the robot that
+  message means a cable is loose.
+- `tools/vex-v5-qemu-textsize.patch` fixes an emulator bug where normal text
+  stayed large after a large print. `tools/sim.sh` applies it automatically.
 
 ## Docs
 - PROS tutorials: https://pros.cs.purdue.edu/v5/tutorials/index.html

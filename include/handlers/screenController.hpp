@@ -7,8 +7,9 @@
 //   showError("motor on port 3 missing");
 //   clearScreen();
 //
-// The screen is 480 x 240 px. Rows 0 to 31 belong to the brain's status bar,
-// so draw at y >= 32. x, y is the top-left corner of the text. Text drawn at
+// The screen is 480 px wide. Keep x + text width under 480 and y from 0 to
+// about 200, with rows at least 35 px apart. x, y is the top-left corner of
+// the text. Text drawn at
 // the same x, y again erases the old text first, so values can be refreshed
 // in a loop without ghosting.
 
@@ -23,7 +24,8 @@ void writeScreenText(const char* text, int x, int y, ScreenFont font = ScreenFon
 // Blacks out the whole user area and forgets every written line.
 void clearScreen();
 
-// Red text in the middle of the screen plus the same message on the console.
+// Red large text at (10, 70) plus the same message on the console. Writing
+// anything else at (10, 70) replaces it.
 void showError(const char* text);
 
 namespace screen_detail {

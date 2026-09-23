@@ -1,0 +1,20 @@
+diff --git a/packages/kernel/src/sdk/display.rs b/packages/kernel/src/sdk/display.rs
+index d81a941..4b07b64 100644
+--- a/packages/kernel/src/sdk/display.rs
++++ b/packages/kernel/src/sdk/display.rs
+@@ -524,6 +524,7 @@ pub unsafe extern "C" fn vexDisplayVString(
+     format: *const c_char,
+     args: VaList<'_, '_>,
+ ) {
++    DISPLAY.lock().set_text_size(NORMAL_TEXT); // rogue patch: VEXos resets to normal size here
+     unsafe {
+         display_string_impl(
+             Point2 {
+@@ -541,6 +542,7 @@ pub unsafe extern "C" fn vexDisplayVStringAt(
+     format: *const c_char,
+     args: VaList<'_, '_>,
+ ) {
++    DISPLAY.lock().set_text_size(NORMAL_TEXT); // rogue patch: VEXos resets to normal size here
+     unsafe {
+         display_string_impl(Point2 { x: xpos, y: ypos }, format, args);
+     }

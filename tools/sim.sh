@@ -10,4 +10,8 @@ export PATH="$HOME/.local/opt/arm-gnu-toolchain-14.3.rel1-darwin-arm64-arm-none-
 # ROGUE_SIM swaps pros::delay for a busy wait (see sleep_ms in main.cpp).
 # Sources are touched so the flag change always recompiles them.
 cd "$HERE" && touch src/*.cpp && pros make EXTRA_CXXFLAGS=-DROGUE_SIM
+# Local fix for the emulator: normal-size text stayed large after a large print.
+PATCH="$HERE/tools/vex-v5-qemu-textsize.patch"
+if git -C "$SIM" apply --check "$PATCH" 2>/dev/null; then git -C "$SIM" apply "$PATCH"; fi
+
 cd "$SIM" && cargo xtask run --release --pros=hot-cold --program "$HERE" "$@"
