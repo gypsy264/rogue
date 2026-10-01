@@ -45,7 +45,12 @@ Slot slots[MAX_SLOTS];
 // Where showError writes. Anything else written at this spot replaces it.
 constexpr int ERROR_X = 10;
 constexpr int ERROR_Y = 70;
-pros::Mutex lock;
+// Built on first use, not at program load, so no RTOS object is created
+// before the brain is ready.
+pros::Mutex& screen_lock() {
+	static pros::Mutex m;
+	return m;
+}
 
 Slot* find_slot(int x, int y) {
 	Slot* free_slot = nullptr;
@@ -67,7 +72,7 @@ void draw_text(const char* text, int x, int y, ScreenFont font, pros::Color colo
 	const Metrics m = metrics(font);
 	const int width = static_cast<int>(std::strlen(text)) * m.w;
 
-	lock.take();
+	screen_lock().take();
 	Slot* slot = find_slot(x, y);
 	int erase_w = width;
 	int erase_h = m.h;
@@ -85,7 +90,7 @@ void draw_text(const char* text, int x, int y, ScreenFont font, pros::Color colo
 	pros::screen::print(format(font), x, y, "%s", text);
 	pace();
 	pros::screen::set_pen(pros::Color::white);
-	lock.give();
+	screen_lock().give();
 }
 
 }  // namespace
@@ -95,15 +100,59 @@ void writeScreenText(const char* text, int x, int y, ScreenFont font) {
 }
 
 void clearScreen() {
-	lock.take();
+	screen_lock().take();
 	for (Slot& s : slots) s.used = false;
 	pros::screen::set_pen(pros::Color::black);
 	pros::screen::fill_rect(0, 0, SCREEN_W, SCREEN_H);
 	pace();
-	lock.give();
+	screen_lock().give();
 }
 
 void showError(const char* text) {
 	printf("ERROR: %s\n", text);
 	draw_text(text, ERROR_X, ERROR_Y, ScreenFont::Large, pros::Color::red);
+}
+
+void drawButton(const char* label, int x, int y, int w, int h, bool on) {
+	screen_lock().take();
+	pros::screen::set_pen(on ? 0x0000C000u : 0x00303030u);
+	pros::screen::fill_rect(x, y, x + w, y + h);
+	pace();
+	pros::screen::set_pen(on ? pros::Color::black : pros::Color::white);
+	pros::screen::print(pros::E_TEXT_SMALL, x + 6, y + (h - 16) / 2, "%s", label);
+	pace();
+	pros::screen::set_pen(pros::Color::white);
+	screen_lock().give();
+}
+
+void drawStick(int cx, int cy, int r, int x, int y) {
+	const int dot_x = cx + x * r / 127;
+	const int dot_y = cy - y * r / 127;
+	screen_lock().take();
+	pros::screen::set_pen(pros::Color::black);
+	pros::screen::fill_rect(cx - r - 8, cy - r - 8, cx + r + 8, cy + r + 8);
+	pace();
+	pros::screen::set_pen(0x00808080u);
+	pros::screen::draw_circle(cx, cy, r);
+	pace();
+	pros::screen::set_pen((x != 0 || y != 0) ? 0x00FFD000u : 0x00606060u);
+	pros::screen::fill_circle(dot_x, dot_y, 6);
+	pace();
+	pros::screen::set_pen(pros::Color::white);
+	screen_lock().give();
+}
+
+bool screenTapped() {
+	static std::int32_t last_presses = -1;
+	const pros::screen_touch_status_s_t touch = pros::screen::touch_status();
+	if (touch.touch_status == pros::E_TOUCH_ERROR) return false;
+	if (last_presses < 0) {
+		last_presses = touch.press_count;
+		return false;
+	}
+	if (touch.press_count != last_presses) {
+		last_presses = touch.press_count;
+		return true;
+	}
+	return false;
 }

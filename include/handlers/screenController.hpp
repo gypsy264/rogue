@@ -24,6 +24,16 @@ void writeScreenText(const char* text, int x, int y, ScreenFont font = ScreenFon
 // Blacks out the whole user area and forgets every written line.
 void clearScreen();
 
+// A labelled box, green when `on`, dark grey when off. Used by the input screen.
+void drawButton(const char* label, int x, int y, int w, int h, bool on);
+
+// A stick: circle of radius r centred at (cx, cy) with a dot at the stick
+// position. x and y are -127 to 127, up is positive.
+void drawStick(int cx, int cy, int r, int x, int y);
+
+// True once each time the brain's touchscreen is pressed.
+bool screenTapped();
+
 // Red large text at (10, 70) plus the same message on the console. Writing
 // anything else at (10, 70) replaces it.
 void showError(const char* text);

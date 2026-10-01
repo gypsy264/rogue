@@ -5,8 +5,9 @@ VEX V5 robot, written in C++ on [PROS](https://pros.cs.purdue.edu/) kernel 4.2.2
 - `src/main.cpp` - robot code: `initialize`, `autonomous`, `opcontrol`
 - `src/handlers/` and `include/handlers/` - helpers shared by all robot code:
   - `screenController`: `writeScreen("text %d", x, y, value)`, `writeScreenLarge`, `showError`, `clearScreen`
-  - `motorController`: `motorDefinePort(DriveSide::Left, 1)` for each drive motor, then `motorInit()`; drive with `driveArcade`, `driveTank`, `driveStop`
-  - `gamepadController`: `gamepadInit()`, sticks with `gamepadLeftY()` and friends, buttons with `gamepadHeld` and `gamepadPressed`, `gamepadRumble`
+  - `motorController`: `motorDefinePort(DriveSide::Left, 10)` for each drive motor, `motorSetMaxRpm(200)` for the cartridge, then `motorInit()`; drive with `driveArcade`, `driveTank`, `driveStop`. Uses speed control (`move_velocity`) with a per-side trim
+  - `gamepadController`: `controllerDefinePort(1)` for a cable in smart port 1 or `CONTROLLER_WIRELESS`, then `gamepadInit()`; sticks with `gamepadLeftY()` and friends, buttons with `gamepadHeld` and `gamepadPressed`, `gamepadRumble`
+  - `supportController`: `sleep_ms` (use it instead of `pros::delay`) and the temporary `autoCalibrate()`, bound to button B
 - `include/main.h` - project header, include it from every source file
 - `include/pros/` and `firmware/` - PROS kernel API and libraries (do not edit)
 - `project.pros`, `Makefile`, `common.mk` - PROS build configuration
@@ -41,7 +42,7 @@ repo cloned at `../vex-v5-qemu` (override with `VEX_SIM_DIR`).
   issue 49), so do not use it.
 - `pros::delay` never returns in the emulator because its timer interrupt is
   incomplete. `tools/sim.sh` builds with `-DROGUE_SIM`, which makes the
-  `sleep_ms` helper in `main.cpp` busy-wait instead. Always call `sleep_ms`,
+  `sleep_ms` helper in `supportController` busy-wait instead. Always call `sleep_ms`,
   never `pros::delay` directly, so both builds behave.
 - Motors, sensors and the controller read zero because nothing is attached,
   so the screen always shows "no motor" in the emulator. On the robot that
