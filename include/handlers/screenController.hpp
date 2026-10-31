@@ -1,41 +1,30 @@
 #pragma once
-// Brain screen helper. Call from anywhere in the code to show debug text.
-//
-//   writeScreen("hello", 10, 40);
-//   writeScreen("loop %d  imu %.1f", 10, 70, loops, heading);   // printf style
-//   writeScreenLarge("AUTON LEFT", 10, 40);
-//   showError("motor on port 3 missing");
-//   clearScreen();
-//
-// The screen is 480 px wide. Keep x + text width under 480 and y from 0 to
-// about 200, with rows at least 35 px apart. x, y is the top-left corner of
-// the text. Text drawn at
-// the same x, y again erases the old text first, so values can be refreshed
-// in a loop without ghosting.
 
 #include <cstdio>
+#include <cstdint>
 #include <cstring>
 
+constexpr std::uint32_t SCREEN_FRAME_MS = 33;
 enum class ScreenFont { Small, Medium, Large };
 
-// Low level, plain text. Erases what was previously written at (x, y).
 void writeScreenText(const char* text, int x, int y, ScreenFont font = ScreenFont::Medium);
 
-// Blacks out the whole user area and forgets every written line.
 void clearScreen();
 
-// A labelled box, green when `on`, dark grey when off. Used by the input screen.
+// Status: y=218..239.
+bool writeScreenStatus(const char* text, bool alert);
+
+void drawScreenBox(int x, int y, int w, int h);
+
+struct ScreenBox { int x, y, w, h; unsigned color; };
+void drawScreenPreview(int x, int y, int w, int h, const ScreenBox* boxes, size_t count);
+
 void drawButton(const char* label, int x, int y, int w, int h, bool on);
 
-// A stick: circle of radius r centred at (cx, cy) with a dot at the stick
-// position. x and y are -127 to 127, up is positive.
 void drawStick(int cx, int cy, int r, int x, int y);
 
-// True once each time the brain's touchscreen is pressed.
 bool screenTapped();
 
-// Red large text at (10, 70) plus the same message on the console. Writing
-// anything else at (10, 70) replaces it.
 void showError(const char* text);
 
 namespace screen_detail {
@@ -48,9 +37,8 @@ void format(char* buf, size_t size, const char* fmt, Args... args) {
 		std::snprintf(buf, size, fmt, args...);
 	}
 }
-}  // namespace screen_detail
+}
 
-// printf-style helpers. Extra arguments go after x and y.
 template <typename... Args>
 void writeScreen(const char* fmt, int x, int y, Args... args) {
 	char buf[96];

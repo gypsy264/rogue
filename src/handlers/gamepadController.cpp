@@ -1,24 +1,37 @@
 #include "handlers/gamepadController.hpp"
 
 #include <memory>
+#include <cerrno>
+#include <algorithm>
 
 #include "main.h"
 
 namespace {
 
-// Created in gamepadInit(), not at program load. A controller object built
-// while the program is still loading can touch the controller before the brain
-// is ready, which is the likely cause of the crash with a cable connected.
 std::unique_ptr<pros::Controller> master;
 int defined_port = CONTROLLER_WIRELESS;
 int deadzone_value = 5;
+int axis_percent = 100;
+
+int checked_read(int value, const char* operation) {
+	if (value != PROS_ERR) return value;
+	const int error = errno;
+	static bool reported = false;
+	static std::uint32_t last_report = 0;
+	const auto now = pros::millis();
+	if (!reported || now - last_report >= 1000) {
+		printf("gamepad: %s failed, errno=%d (input suppressed)\n", operation, error);
+		reported = true;
+		last_report = now;
+	}
+	return 0;
+}
 
 int read_stick(pros::controller_analog_e_t channel) {
 	if (!master) return 0;
-	const int value = master->get_analog(channel);
-	if (value == PROS_ERR) return 0;
+	const int value = checked_read(master->get_analog(channel), "analog");
 	if (value > -deadzone_value && value < deadzone_value) return 0;
-	return value;
+	return std::clamp(value, -127, 127) * axis_percent / 100;
 }
 
 pros::controller_digital_e_t to_pros(GamepadButton button) {
@@ -38,7 +51,7 @@ pros::controller_digital_e_t to_pros(GamepadButton button) {
 	}
 }
 
-}  // namespace
+}
 
 void controllerDefinePort(int port) {
 	if (master) {
@@ -58,18 +71,17 @@ void controllerDefinePort(int port) {
 void gamepadInit(int deadzone) {
 	deadzone_value = deadzone < 0 ? 0 : deadzone;
 	if (!master) master = std::make_unique<pros::Controller>(pros::E_CONTROLLER_MASTER);
-	printf("gamepad: defined %s", defined_port == CONTROLLER_WIRELESS ? "wireless" : "on port ");
+	printf("gamepad: MASTER, wiring note %s", defined_port == CONTROLLER_WIRELESS ? "wireless" : "port ");
 	if (defined_port != CONTROLLER_WIRELESS) printf("%d", defined_port);
 	printf(", link now %s, deadzone %d\n", gamepadLinkText(), deadzone_value);
 }
 
-// PROS returns the raw link state: 0 offline, 1 cable (tethered), 2 radio.
-// Anything above 0 is a working controller.
 int link_state() {
 	if (!master) return 0;
-	const int state = master->is_connected();
-	return state == PROS_ERR ? 0 : state;
+	return checked_read(master->is_connected(), "connection");
 }
+
+void gamepadSetAxisPercent(int percent) { axis_percent = std::clamp(percent, 0, 100); }
 
 bool gamepadConnected() { return link_state() > 0; }
 
@@ -90,8 +102,7 @@ int gamepadRawAxis(GamepadAxis axis) {
 		case GamepadAxis::RightX: channel = pros::E_CONTROLLER_ANALOG_RIGHT_X; break;
 		case GamepadAxis::RightY: channel = pros::E_CONTROLLER_ANALOG_RIGHT_Y; break;
 	}
-	const int value = master->get_analog(channel);
-	return value == PROS_ERR ? 0 : value;
+	return checked_read(master->get_analog(channel), "raw analog");
 }
 
 const char* gamepadButtonName(GamepadButton button) {
@@ -104,7 +115,9 @@ int gamepadLeftY()  { return read_stick(pros::E_CONTROLLER_ANALOG_LEFT_Y); }
 int gamepadRightX() { return read_stick(pros::E_CONTROLLER_ANALOG_RIGHT_X); }
 int gamepadRightY() { return read_stick(pros::E_CONTROLLER_ANALOG_RIGHT_Y); }
 
-bool gamepadHeld(GamepadButton button) { return master && master->get_digital(to_pros(button)) == 1; }
+bool gamepadHeld(GamepadButton button) {
+	return master && checked_read(master->get_digital(to_pros(button)), "digital") == 1;
+}
 
 bool gamepadPressed(GamepadButton button) { return master && master->get_digital_new_press(to_pros(button)) == 1; }
 

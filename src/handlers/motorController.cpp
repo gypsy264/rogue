@@ -1,6 +1,9 @@
 #include "handlers/motorController.hpp"
+#include "handlers/cameraController.hpp"
 
 #include <cmath>
+#include <algorithm>
+#include <limits>
 #include <memory>
 #include <vector>
 
@@ -25,7 +28,7 @@ int clamp_power(int value) {
 	if (value < -127) return -127;
 	return value;
 }
-
+// Defining gears, RPM Values
 pros::MotorGears gears_for(int rpm) {
 	if (rpm == 100) return pros::MotorGears::red;
 	if (rpm == 600) return pros::MotorGears::blue;
@@ -42,7 +45,6 @@ bool port_taken(int port) {
 	return false;
 }
 
-// Appends the ports with no motor attached to `missing` and returns the count.
 int check_plugged(const std::vector<std::int8_t>& ports, char* missing, size_t size) {
 	int count = 0;
 	for (std::int8_t p : ports) {
@@ -56,12 +58,11 @@ int check_plugged(const std::vector<std::int8_t>& ports, char* missing, size_t s
 	return count;
 }
 
-// -127..127 power to a target rpm, with the side's trim applied.
 int to_rpm(int power, double trim) {
 	return static_cast<int>(std::lround(power * trim * max_rpm / 127.0));
 }
 
-}  // namespace
+}
 
 void motorDefinePort(DriveSide side, int port) {
 	if (initialized) {
@@ -124,16 +125,27 @@ int motorInit() {
 	return count;
 }
 
-void driveTank(int left, int right) {
+void driveTank(int left, int right, bool applyTrim) {
 	if (!left_group || !right_group) return;
 	left_power = clamp_power(left);
 	right_power = clamp_power(right);
-	left_group->move_velocity(to_rpm(left_power, left_trim));
-	right_group->move_velocity(to_rpm(right_power, right_trim));
+	cameraSetMoving(left_power != 0 || right_power != 0);
+	left_group->move_velocity(to_rpm(left_power, applyTrim ? left_trim : 1.0));
+	right_group->move_velocity(to_rpm(right_power, applyTrim ? right_trim : 1.0));
 }
 
-void driveArcade(int forward, int turn) {
-	driveTank(forward + turn, forward - turn);
+void driveArcade(int forward, int turn, int maxPower) {
+	maxPower = std::clamp(maxPower, 0, 127);
+	driveTank(std::clamp(forward + turn, -maxPower, maxPower),
+	          std::clamp(forward - turn, -maxPower, maxPower));
+}
+
+bool driveReady() {
+	if (!left_group || !right_group || left_ports.empty() || right_ports.empty()) return false;
+	for (const auto* ports : {&left_ports, &right_ports})
+		for (const auto port : *ports)
+			if (pros::c::get_plugged_type(std::abs(port)) != pros::c::E_DEVICE_MOTOR) return false;
+	return true;
 }
 
 void driveStop() {
@@ -144,6 +156,7 @@ int driveLeftPower() { return left_power; }
 int driveRightPower() { return right_power; }
 
 void motorSetTrim(DriveSide side, double trim) {
+	if (!std::isfinite(trim)) return;
 	if (trim < 0.5) trim = 0.5;
 	if (trim > 1.0) trim = 1.0;
 	(side == DriveSide::Left ? left_trim : right_trim) = trim;
@@ -158,7 +171,7 @@ double motorMeasuredRpm(DriveSide side) {
 	double sum = 0.0;
 	int n = 0;
 	for (double v : speeds) {
-		if (v == PROS_ERR_F || std::isinf(v) || std::isnan(v)) continue;
+		if (v == PROS_ERR_F || !std::isfinite(v)) return std::numeric_limits<double>::quiet_NaN();
 		sum += std::fabs(v);
 		n++;
 	}

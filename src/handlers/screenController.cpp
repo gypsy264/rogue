@@ -5,11 +5,8 @@
 namespace {
 
 constexpr int SCREEN_W = 480;
-constexpr int SCREEN_H = 272;  // physical panel; the status bar area is protected by the brain
+constexpr int STATUS_Y = 218;
 
-
-// Approximate glyph sizes of the brain's built-in monospace font, used to
-// size the erase box behind each line. Slightly generous on purpose.
 struct Metrics { int w; int h; };
 Metrics metrics(ScreenFont font) {
 	switch (font) {
@@ -19,8 +16,6 @@ Metrics metrics(ScreenFont font) {
 	}
 }
 
-// The emulator's display channel stalls when draw commands arrive back to
-// back, so emulator builds pause briefly after each one. No-op on the robot.
 void pace() {
 #ifdef ROGUE_SIM
 	uint32_t start = pros::millis();
@@ -36,17 +31,13 @@ pros::text_format_e_t format(ScreenFont font) {
 	}
 }
 
-// Remembers how wide the last text at each (x, y) was, so a shorter new
-// value still wipes the old one completely.
 struct Slot { int x; int y; int width; int height; bool used; };
 constexpr int MAX_SLOTS = 32;
 Slot slots[MAX_SLOTS];
 
-// Where showError writes. Anything else written at this spot replaces it.
 constexpr int ERROR_X = 10;
 constexpr int ERROR_Y = 70;
-// Built on first use, not at program load, so no RTOS object is created
-// before the brain is ready.
+
 pros::Mutex& screen_lock() {
 	static pros::Mutex m;
 	return m;
@@ -61,10 +52,10 @@ Slot* find_slot(int x, int y) {
 	if (free_slot) {
 		*free_slot = {x, y, 0, 0, true};
 	}
-	return free_slot;  // nullptr when all slots are taken: text is still drawn, just not erased later
+	return free_slot;
 }
 
-}  // namespace
+}
 
 namespace {
 
@@ -83,7 +74,7 @@ void draw_text(const char* text, int x, int y, ScreenFont font, pros::Color colo
 		slot->height = m.h;
 	}
 
-		pros::screen::set_pen(pros::Color::black);
+	pros::screen::set_pen(pros::Color::black);
 	pros::screen::fill_rect(x, y, x + erase_w, y + erase_h);
 	pace();
 	pros::screen::set_pen(color);
@@ -93,7 +84,7 @@ void draw_text(const char* text, int x, int y, ScreenFont font, pros::Color colo
 	screen_lock().give();
 }
 
-}  // namespace
+}
 
 void writeScreenText(const char* text, int x, int y, ScreenFont font) {
 	draw_text(text, x, y, font, pros::Color::white);
@@ -103,14 +94,53 @@ void clearScreen() {
 	screen_lock().take();
 	for (Slot& s : slots) s.used = false;
 	pros::screen::set_pen(pros::Color::black);
-	pros::screen::fill_rect(0, 0, SCREEN_W, SCREEN_H);
+	pros::screen::fill_rect(0, 0, SCREEN_W - 1, STATUS_Y - 1);
 	pace();
 	screen_lock().give();
+}
+
+bool writeScreenStatus(const char* text, bool alert) {
+	if (!screen_lock().take(5)) return false;
+	pros::screen::set_pen(alert ? 0x00600000u : 0x00181818u);
+	pros::screen::fill_rect(0, STATUS_Y, SCREEN_W - 1, 239);
+	pace();
+	pros::screen::set_pen(pros::Color::white);
+	pros::screen::print(pros::E_TEXT_SMALL, 4, STATUS_Y + 2, "%.58s", text);
+	pace();
+	screen_lock().give();
+	return true;
 }
 
 void showError(const char* text) {
 	printf("ERROR: %s\n", text);
 	draw_text(text, ERROR_X, ERROR_Y, ScreenFont::Large, pros::Color::red);
+}
+
+void drawScreenBox(int x, int y, int w, int h) {
+	screen_lock().take();
+	pros::screen::set_pen(0x0040B0FFu);
+	pros::screen::draw_rect(x, y, x + w, y + h);
+	pace();
+	pros::screen::set_pen(pros::Color::white);
+	screen_lock().give();
+}
+
+void drawScreenPreview(int x, int y, int w, int h, const ScreenBox* boxes, size_t count) {
+	screen_lock().take();
+	pros::screen::set_pen(0x00080810u);
+	pros::screen::fill_rect(x, y, x + w, y + h);
+	pace();
+	pros::screen::set_pen(0x0040B0FFu);
+	pros::screen::draw_rect(x, y, x + w, y + h);
+	pace();
+	for (size_t i = 0; i < count; ++i) {
+		const auto& b = boxes[i];
+		pros::screen::set_pen(b.color);
+		pros::screen::draw_rect(x + b.x, y + b.y, x + b.x + b.w, y + b.y + b.h);
+		pace();
+	}
+	pros::screen::set_pen(pros::Color::white);
+	screen_lock().give();
 }
 
 void drawButton(const char* label, int x, int y, int w, int h, bool on) {
